@@ -22,6 +22,7 @@ const config: CapacitorConfig = {
     // in the system browser's cookie jar instead of the WebView's,
     // and the user never gets logged in inside the app.
     allowNavigation: [
+      'ahousedividedgame.com',
       'discord.com',
       'accounts.google.com',
       'www.google.com',
