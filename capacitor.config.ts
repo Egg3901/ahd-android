@@ -6,11 +6,11 @@ const config: CapacitorConfig = {
   webDir: 'www',
   android: {
     allowMixedContent: false,
-    // The WebView loads the remote URL (see server.url).
-    // This keeps the domain-scoped JWT cookie working without
-    // reimplementing auth.
     captureInput: true,
     backgroundColor: '#0f172a',
+    // Appended to the WebView UA so the server can detect native app context
+    // and suppress web chrome (navbar, statusbar, footer) that we replace natively.
+    appendUserAgent: 'AHD-Android/1.0',
   },
   server: {
     // Load the live production site. The WebView will be restricted

@@ -4,6 +4,7 @@ android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
 *.keystore
 *.jks
+android/keystore.properties
 google-services.json
 .env
 .DS_Store

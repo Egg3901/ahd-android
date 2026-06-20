@@ -1,68 +1,42 @@
 package com.ahousedivided.app;
 
-import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
-import android.widget.FrameLayout;
-import android.view.View;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.Button;
+import android.view.ViewGroup;
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.Bridge;
-import com.getcapacitor.WebViewListener;
 import com.getcapacitor.Logger;
+import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "AHD-MainActivity";
-    private static final String APP_ORIGIN = "ahousedividedgame.com";
 
     private View offlineOverlay;
-
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-    }
+    private ViewGroup contentRoot;
 
     @Override
     protected void load() {
         super.load();
-        setupWebView();
+        setupCookies();
+        setupWebViewListeners();
     }
 
-    private void setupWebView() {
-        Bridge bridge = this.getBridge();
-        if (bridge == null) return;
+    private void setupCookies() {
+        WebView webView = getBridge().getWebView();
+        CookieManager cm = CookieManager.getInstance();
+        cm.setAcceptCookie(true);
+        cm.setAcceptThirdPartyCookies(webView, true);
+        cm.flush();
+        contentRoot = (ViewGroup) webView.getParent();
+    }
 
-        WebView webView = bridge.getWebView();
-        if (webView == null) return;
-
-        // ── Cookie persistence ──────────────────────────────────────
-        // The game uses a domain-scoped HTTP-only JWT cookie on
-        // .ahousedividedgame.com. Enable persistent cookie storage so
-        // the 7-day session survives app restarts.
-        CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(webView, true);
-        // Force immediate persistence of any cookies in memory
-        cookieManager.flush();
-
-        // ── WebView settings ────────────────────────────────────────
-        webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
-        // Allow viewport scaling control by the page (responsive game)
-        webView.getSettings().setUseWideViewPort(true);
-        webView.getSettings().setLoadWithOverviewMode(true);
-        // Allow file access for downloads if needed
-        webView.getSettings().setAllowFileAccess(false);
-        webView.getSettings().setAllowContentAccess(false);
-        // Media playback
-        webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
-
-        // ── Offline detection via WebViewListener ───────────────────
-        bridge.addWebViewListener(new WebViewListener() {
+    private void setupWebViewListeners() {
+        getBridge().addWebViewListener(new WebViewListener() {
             @Override
             public void onPageStarted(WebView view) {
                 hideOfflineOverlay();
@@ -71,44 +45,16 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageLoaded(WebView view) {
                 hideOfflineOverlay();
+                CookieManager.getInstance().flush();
             }
 
             @Override
             public void onReceivedError(WebView view) {
-                Logger.debug(TAG, "WebView error received — showing offline overlay");
+                Logger.debug(TAG, "WebView load error");
                 showOfflineOverlay();
             }
-
-            @Override
-            public void onReceivedHttpError(WebView view) {
-                // Don't show offline for non-main-frame HTTP errors (e.g., 404 on sub-resource).
-                // Only main-frame failures indicate server unreachable.
-                Logger.debug(TAG, "WebView HTTP error received");
-            }
         });
-
-        // ── Flush cookies on pause so they persist ──────────────────
-        // This is handled by the bridge lifecycle, but we reinforce it.
     }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        // Persist cookies when app goes to background
-        CookieManager.getInstance().flush();
-    }
-
-    // ── External link interception ───────────────────────────────────
-    // The Capacitor Bridge already handles external links: its
-    // BridgeWebViewClient calls bridge.launchIntent(url) from
-    // shouldOverrideUrlLoading, and any host outside the app origin (and
-    // outside server.allowNavigation) opens in the system browser via
-    // Intent.ACTION_VIEW. This is sufficient for the OAuth flow — the
-    // Discord/Google auth pages are whitelisted in allowNavigation and
-    // load inside the WebView so the callback cookie lands in the
-    // WebView's cookie jar. No custom WebViewClient is required.
-
-    // ── Offline overlay ───────────────────────────────────────────────
 
     private void showOfflineOverlay() {
         runOnUiThread(() -> {
@@ -117,56 +63,63 @@ public class MainActivity extends BridgeActivity {
                 return;
             }
 
-            FrameLayout root = (FrameLayout) findViewById(android.R.id.content);
-            offlineOverlay = new LinearLayout(this);
-            LinearLayout layout = (LinearLayout) offlineOverlay;
+            LinearLayout layout = new LinearLayout(this);
             layout.setOrientation(LinearLayout.VERTICAL);
-            layout.setGravity(android.view.Gravity.CENTER);
-            layout.setPadding(64, 64, 64, 64);
-            layout.setBackgroundColor(0xFF0F172A); // slate-900
+            layout.setGravity(Gravity.CENTER);
+            layout.setPadding(dp(32), dp(32), dp(32), dp(32));
+            layout.setBackgroundColor(0xFF0F172A);
 
             TextView title = new TextView(this);
             title.setText("Can't Reach the Server");
-            title.setTextColor(0xFF94A3B8); // slate-400
+            title.setTextColor(0xFF94A3B8);
             title.setTextSize(20);
-            title.setPadding(0, 0, 0, 16);
-            title.setGravity(android.view.Gravity.CENTER);
+            title.setGravity(Gravity.CENTER);
+            title.setPadding(0, 0, 0, dp(8));
 
             TextView subtitle = new TextView(this);
             subtitle.setText("A House Divided requires an internet connection.\nCheck your connection and try again.");
-            subtitle.setTextColor(0xFF64748B); // slate-500
+            subtitle.setTextColor(0xFF64748B);
             subtitle.setTextSize(14);
-            subtitle.setGravity(android.view.Gravity.CENTER);
-            subtitle.setPadding(0, 0, 0, 32);
+            subtitle.setGravity(Gravity.CENTER);
+            subtitle.setPadding(0, 0, 0, dp(24));
 
             Button retry = new Button(this);
             retry.setText("Retry");
             retry.setTextColor(0xFFFFFFFF);
-            retry.setBackgroundColor(0xFF2563EB); // blue-600
-            retry.setPadding(48, 24, 48, 24);
+            retry.setBackgroundColor(0xFF2563EB);
+            retry.setPadding(dp(24), dp(12), dp(24), dp(12));
             retry.setOnClickListener(v -> {
                 hideOfflineOverlay();
-                if (getBridge() != null && getBridge().getWebView() != null) {
-                    getBridge().getWebView().reload();
-                }
+                WebView wv = getBridge().getWebView();
+                if (wv != null) wv.reload();
             });
 
             layout.addView(title);
             layout.addView(subtitle);
             layout.addView(retry);
 
-            root.addView(offlineOverlay, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ));
+            offlineOverlay = layout;
+            if (contentRoot != null) {
+                contentRoot.addView(offlineOverlay, new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+            }
         });
     }
 
     private void hideOfflineOverlay() {
         runOnUiThread(() -> {
-            if (offlineOverlay != null) {
-                offlineOverlay.setVisibility(View.GONE);
-            }
+            if (offlineOverlay != null) offlineOverlay.setVisibility(View.GONE);
         });
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }
