@@ -137,15 +137,18 @@ Replace the `drawable-*/splash.png` files with your splash image. Use Android St
 The app loads `https://www.ahousedividedgame.com` in a Capacitor WebView. Capacitor's `BridgeWebViewClient` intercepts URL navigation:
 
 - **Same-origin URLs** (anything on `ahousedividedgame.com`): load inside the WebView — session cookie is sent automatically.
-- **External URLs** (any other domain): opened in the system browser via `Intent.ACTION_VIEW`. This covers:
-  - Discord OAuth: `discord.com/oauth2/authorize`
-  - Google OAuth: `accounts.google.com/o/oauth2/auth`
-  - Any outbound links
+- **OAuth provider URLs** (`discord.com`, `accounts.google.com`, `www.google.com`): configured in `server.allowNavigation` in `capacitor.config.ts` — these load **inside the WebView** so the OAuth callback redirect sets the session cookie in the WebView's cookie jar, not the system browser's. This is critical: if OAuth opened in the system browser, the callback redirect would set the cookie there, and the user would never be logged in inside the app.
+- **All other external URLs**: opened in the system browser via `Intent.ACTION_VIEW`.
 
-When OAuth redirects back to `https://www.ahousedividedgame.com/...`, the URL matches the app origin and loads in the WebView. The session cookie is set on `.ahousedividedgame.com` and persists.
+### OAuth flow walkthrough (Discord)
+1. User taps "Sign in with Discord" → WebView navigates to `https://discord.com/oauth2/authorize?...`
+2. `allowNavigation` matches `discord.com` → page loads in WebView
+3. User authorizes on Discord → Discord redirects to `https://www.ahousedividedgame.com/api/auth/callback/discord?...`
+4. This URL matches the app origin → loads in WebView → server sets JWT cookie on `.ahousedividedgame.com`
+5. `CookieManager` persists the cookie → user is logged in across restarts
 
 ### Custom Tabs
-`MainActivity.java` includes a `openInCustomTabs()` method using AndroidX Custom Tabs for a smoother OAuth experience. The default Capacitor `BridgeWebViewClient` already opens external links in the system browser; the Custom Tabs implementation can be wired in by overriding the WebViewClient if desired (see inline comment in `MainActivity.java`).
+`MainActivity.java` includes an `openInCustomTabs()` utility using AndroidX Custom Tabs. The default Capacitor behavior already handles external links via `Intent.ACTION_VIEW` (system browser). Custom Tabs can be wired in by overriding the WebViewClient if a smoother in-app browser experience is desired for non-OAuth external links.
 
 ## Cookie / Session Persistence
 

@@ -17,6 +17,15 @@ const config: CapacitorConfig = {
     // to this origin so cookies flow naturally.
     url: 'https://www.ahousedividedgame.com',
     cleartext: false, // enforce HTTPS
+    // Allow OAuth provider domains to navigate inside the WebView.
+    // Without this, OAuth callback redirects set the session cookie
+    // in the system browser's cookie jar instead of the WebView's,
+    // and the user never gets logged in inside the app.
+    allowNavigation: [
+      'discord.com',
+      'accounts.google.com',
+      'www.google.com',
+    ],
   },
   plugins: {
     SplashScreen: {
