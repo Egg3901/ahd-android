@@ -10,7 +10,7 @@ The game's auth uses a custom JWT stored in an HTTP-only cookie scoped to `.ahou
 
 | Tool | Version | Notes |
 |------|---------|-------|
-| Node.js | ≥ 20 | LTS recommended |
+| Node.js | ≥ 22 | Required by the Capacitor 8 CLI |
 | Android Studio | Koala 2024.1.1+ | Includes Android SDK |
 | JDK | 21 | Required by Capacitor 8 / Gradle 8 |
 | Gradle | (managed by wrapper) | `gradlew` uses the pinned version |
