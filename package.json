@@ -1,0 +1,33 @@
+{
+  "name": "ahd-android",
+  "version": "1.0.0",
+  "description": "Thin Android wrapper for A House Divided — a turn-based political simulation",
+  "main": "index.js",
+  "scripts": {
+    "cap:sync": "cap sync android",
+    "cap:add:android": "cap add android",
+    "build:apk": "cd android && ./gradlew assembleDebug",
+    "build:run": "cap sync android && cd android && ./gradlew installDebug",
+    "open:android": "cap open android"
+  },
+  "keywords": [
+    "capacitor",
+    "android",
+    "ahd",
+    "political-sim"
+  ],
+  "author": "A House Divided",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/splash-screen": "^8.0.1"
+  }
+}
