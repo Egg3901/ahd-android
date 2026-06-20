@@ -14,24 +14,31 @@
  *      or inject this script via Capacitor's JS injection
  *
  * SERVER-SIDE HOOK (game's hourly turn processor):
- *   When a turn advances or a vote is scheduled, the server calls
- *   FCM with the player's stored device token:
+ *   When a turn advances or a vote is scheduled, the server calls the
+ *   FCM HTTP v1 API with the player's stored device token. (The legacy
+ *   `fcm.googleapis.com/fcm/send` + `Authorization: key=...` API was shut
+ *   down by Google in June 2024 — do not use it.)
  *
- *   POST https://fcm.googleapis.com/fcm/send
- *   Headers: { Authorization: `key=${FCM_SERVER_KEY}` }
+ *   POST https://fcm.googleapis.com/v1/projects/<PROJECT_ID>/messages:send
+ *   Headers: { Authorization: `Bearer <OAUTH2_ACCESS_TOKEN>` }
+ *     The access token is minted from the Firebase service-account JSON
+ *     via the google-auth-library (scope:
+ *     https://www.googleapis.com/auth/firebase.messaging).
  *   Body: {
- *     "to": "<player_device_token>",
- *     "notification": {
- *       "title": "Your Turn",
- *       "body": "A new turn has started in A House Divided.",
- *       "click_action": "FLUTTER_NOTIFICATION_CLICK",
- *     },
- *     "data": {
- *       "type": "turn_start",
- *       "turn": 1234,
- *       "deep_link": "https://www.ahousedividedgame.com/dashboard"
+ *     "message": {
+ *       "token": "<player_device_token>",
+ *       "notification": {
+ *         "title": "Your Turn",
+ *         "body": "A new turn has started in A House Divided."
+ *       },
+ *       "data": {
+ *         "type": "turn_start",
+ *         "turn": "1234",
+ *         "deep_link": "https://www.ahousedividedgame.com/dashboard"
+ *       }
  *     }
  *   }
+ *   Note: every value in `data` must be a string under the v1 API.
  *
  * The game server should store device tokens in the user document:
  *   user.pushTokens: [{ token, platform: "android", createdAt, lastSeen }]

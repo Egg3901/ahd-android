@@ -45,10 +45,10 @@ ahd-android/
     │   │   ├── java/com/ahousedivided/app/
     │   │   │   └── MainActivity.java    # Custom: cookies, offline overlay, external links
     │   │   └── res/
-    │   │       ├── drawable-v24/ic_launcher_foreground.xml  # Capitol dome icon
     │   │       ├── drawable/ic_launcher_background.xml     # Dark slate background
     │   │       ├── drawable-*/splash.png                   # Splash placeholders
-    │   │       ├── mipmap-*/ic_launcher*.png               # App icons (replace with real)
+    │   │       ├── mipmap-anydpi-v26/ic_launcher.xml       # Adaptive icon (bg + fg)
+    │   │       ├── mipmap-*/ic_launcher*.png               # App icons + foreground (replace with real)
     │   │       └── values/
     │   │           ├── strings.xml
     │   │           ├── styles.xml
@@ -116,7 +116,7 @@ Same sizes for `ic_launcher_round.png` and `ic_launcher_foreground.png`.
 
 **Recommended:** Use Android Studio's Image Asset Studio (right-click `res/` → New → Image Asset) to auto-generate all densities from a single source image.
 
-The current foreground is a vector drawable (`drawable-v24/ic_launcher_foreground.xml`) — a simplified capitol dome silhouette. The background is solid `#0F172A` (slate-900).
+The adaptive icon is defined in `mipmap-anydpi-v26/ic_launcher.xml`: the foreground is a PNG (`mipmap-*/ic_launcher_foreground.png`) and the background is the solid color `@color/ic_launcher_background` (`#0F172A`, slate-900).
 
 ### Splash Screen
 Splash screen is configured in `capacitor.config.ts`:
@@ -176,15 +176,19 @@ This is implemented in `MainActivity.java` via a `WebViewListener` that listens 
 
 ### What's done
 - `@capacitor/push-notifications` plugin installed and synced
-- `src/push-notifications.ts` — registration + listener stub
+- `src/push-notifications.ts` — registration + listener **stub**. Note: this
+  file is **not yet wired into the running app**. It compiles to `dist/`, but
+  nothing in `www/index.html` loads it and there is no injection step. To
+  activate it, either bundle/import it from the web app or inject it via the
+  Capacitor bridge. Until then it serves as the reference implementation.
 - `google-services.json` integration is scaffolded in `android/app/build.gradle` (auto-applies the Google Services plugin when the file is present)
 
 ### What's needed to complete
 1. **Create a Firebase project** → [console.firebase.google.com](https://console.firebase.google.com)
 2. **Add an Android app** to the Firebase project with package name `com.ahousedivided.app`
 3. **Download `google-services.json`** → place in `android/app/`
-4. **Get FCM Server Key** → Firebase Console → Project Settings → Cloud Messaging → Server Key
-5. **Set `FCM_SERVER_KEY`** on the game server
+4. **Create a service account** → Firebase Console → Project Settings → Service Accounts → "Generate new private key". The legacy "Server Key" was decommissioned in June 2024 and no longer works.
+5. **Set the service-account credentials** on the game server (e.g. `GOOGLE_APPLICATION_CREDENTIALS` pointing at the JSON, or the Firebase Admin SDK). The server mints short-lived OAuth2 access tokens from these to call the FCM HTTP v1 API.
 6. **Implement server-side endpoints** (see below)
 
 ### Server-side endpoints
@@ -209,44 +213,51 @@ Content-Type: application/json
 Removes the token from the user document.
 
 ### Server-side cron hook
-In the hourly turn processor, after turn advancement:
+In the hourly turn processor, after turn advancement. The simplest correct
+approach is the Firebase Admin SDK, which handles OAuth2 token minting and
+multicast batching (up to 500 tokens per `sendEachForMulticast` call) for you:
 
 ```javascript
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
+
+initializeApp({ credential: cert(process.env.GOOGLE_APPLICATION_CREDENTIALS) });
+
 // 1. Get users with push tokens who opted in
 const users = await db.collection('users').find({
   'pushTokens.0': { $exists: true },
   'settings.pushNotifications': true
 }).toArray();
 
-// 2. Build batch FCM message (max 500 tokens per batch)
-const messages = users.flatMap(u =>
-  u.pushTokens.map(t => ({
-    to: t.token,
-    notification: {
-      title: 'Your Turn',
-      body: 'A new turn has started in A House Divided.',
-    },
-    data: {
-      type: 'turn_start',
-      turn: String(currentTurn),
-      deep_link: 'https://www.ahousedividedgame.com/dashboard',
-    },
-  }))
-);
+const tokens = users.flatMap(u => u.pushTokens.map(t => t.token));
 
-// 3. Send via FCM HTTP v1 API
-await fetch('https://fcm.googleapis.com/fcm/send', {
-  method: 'POST',
-  headers: {
-    'Authorization': `key=${process.env.FCM_SERVER_KEY}`,
-    'Content-Type': 'application/json',
+// 2. Send via FCM HTTP v1 API (Admin SDK handles auth + batching).
+//    Note: all `data` values must be strings under the v1 API.
+const res = await getMessaging().sendEachForMulticast({
+  tokens,
+  notification: {
+    title: 'Your Turn',
+    body: 'A new turn has started in A House Divided.',
   },
-  body: JSON.stringify(messages.length === 1 ? messages[0] : { messages }),
+  data: {
+    type: 'turn_start',
+    turn: String(currentTurn),
+    deep_link: 'https://www.ahousedividedgame.com/dashboard',
+  },
 });
 
-// 4. Clean up invalid tokens from response
-// (FCM returns "NotRegistered" for stale tokens — remove them)
+// 3. Clean up invalid tokens from the per-message responses
+//    (errors with code messaging/registration-token-not-registered are stale).
+res.responses.forEach((r, i) => {
+  if (!r.success && r.error?.code === 'messaging/registration-token-not-registered') {
+    // remove tokens[i] from the owning user document
+  }
+});
 ```
+
+If you call the raw HTTP endpoint instead of the Admin SDK, POST to
+`https://fcm.googleapis.com/v1/projects/<PROJECT_ID>/messages:send` with an
+`Authorization: Bearer <oauth2-access-token>` header (one message per request).
 
 ## Decisions & Limitations
 
