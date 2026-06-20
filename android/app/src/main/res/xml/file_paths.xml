@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider scope. The default Capacitor template exposes the entire
+  external-storage and cache roots (path="."), which is needless attack
+  surface for an app that shares no files. This wrapper does not export
+  any files, so the scope is narrowed to a single dedicated sub-directory
+  that no code currently writes to. Widen only if a feature genuinely
+  needs to share files via the provider.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <cache-path name="shared_cache" path="shared/" />
 </paths>

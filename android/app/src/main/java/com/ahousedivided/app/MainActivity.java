@@ -1,8 +1,6 @@
 package com.ahousedivided.app;
 
 import android.os.Bundle;
-import android.content.Intent;
-import android.net.Uri;
 import android.webkit.CookieManager;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
@@ -14,7 +12,6 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.WebViewListener;
 import com.getcapacitor.Logger;
-import androidx.browser.customtabs.CustomTabsIntent;
 
 public class MainActivity extends BridgeActivity {
 
@@ -102,28 +99,14 @@ public class MainActivity extends BridgeActivity {
     }
 
     // ── External link interception ───────────────────────────────────
-    // The Capacitor Bridge already opens external links in the system
-    // browser. We override the WebViewClient to use Custom Tabs for a
-    // smoother OAuth experience (Discord, Google sign-in pages).
-    // The bridge handles this via launchIntent(), but for better UX we
-    // intercept at the WebViewClient level using a custom approach.
-    //
-    // NOTE: Capacitor's BridgeWebViewClient calls bridge.launchIntent(url)
-    // in shouldOverrideUrlLoading. If the URL host differs from the app
-    // origin, it opens in the system browser. This is sufficient for
-    // OAuth — Discord and Google auth pages will open in the system browser
-    // and redirect back to the app origin, which loads in the WebView.
-    //
-    // For Custom Tabs support (better UX), we set a custom WebViewClient
-    // that wraps the existing one.
-
-    private void openInCustomTabs(Uri url) {
-        CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
-        builder.setShowTitle(true);
-        CustomTabsIntent customTabsIntent = builder.build();
-        customTabsIntent.intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        customTabsIntent.launchUrl(this, url);
-    }
+    // The Capacitor Bridge already handles external links: its
+    // BridgeWebViewClient calls bridge.launchIntent(url) from
+    // shouldOverrideUrlLoading, and any host outside the app origin (and
+    // outside server.allowNavigation) opens in the system browser via
+    // Intent.ACTION_VIEW. This is sufficient for the OAuth flow — the
+    // Discord/Google auth pages are whitelisted in allowNavigation and
+    // load inside the WebView so the callback cookie lands in the
+    // WebView's cookie jar. No custom WebViewClient is required.
 
     // ── Offline overlay ───────────────────────────────────────────────
 
