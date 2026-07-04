@@ -16,3 +16,5 @@ android/captures/
 android/.idea/
 android/*.iml
 android/app/*.iml
+android/key.properties
+android/keystore/
