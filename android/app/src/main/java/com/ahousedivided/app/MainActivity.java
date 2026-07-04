@@ -1,29 +1,68 @@
 package com.ahousedivided.app;
 
+import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.SystemClock;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.view.ViewGroup;
+import android.widget.Toast;
+import androidx.browser.customtabs.CustomTabsIntent;
+import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.Logger;
 import com.getcapacitor.WebViewListener;
 
 public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "AHD-MainActivity";
+    private static final String APP_ORIGIN = "ahousedividedgame.com";
+    // Reload when returning from background after this long — the game is
+    // turn-based, so a stale page can show a turn-old state.
+    private static final long STALE_SESSION_MS = 30 * 60 * 1000;
+    private static final long BACK_EXIT_WINDOW_MS = 2000;
 
     private View offlineOverlay;
     private ViewGroup contentRoot;
+    private ConnectivityManager.NetworkCallback networkCallback;
+    private ConnectivityManager connectivityManager;
+    private long lastBackPressMs = 0;
+    private long pausedAtMs = 0;
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // Match system bars to the game's slate background
+        getWindow().setStatusBarColor(0xFF0F172A);
+        getWindow().setNavigationBarColor(0xFF0F172A);
+    }
 
     @Override
     protected void load() {
         super.load();
         setupCookies();
         setupWebViewListeners();
+        setupExternalLinkHandling();
+        setupNetworkMonitoring();
+
+        // Remote inspection from chrome://inspect (debuggable builds only)
+        boolean debuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        if (debuggable) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
     }
 
     private void setupCookies() {
@@ -54,6 +93,87 @@ public class MainActivity extends BridgeActivity {
                 showOfflineOverlay();
             }
         });
+    }
+
+    // Hosts in allowNavigation (app origin + OAuth providers) must stay in
+    // the WebView so the session cookie lands in its jar; everything else
+    // gets a Custom Tab instead of a cold browser hand-off.
+    private void setupExternalLinkHandling() {
+        Bridge bridge = getBridge();
+        bridge.setWebViewClient(new BridgeWebViewClient(bridge) {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                Uri url = request.getUrl();
+                String scheme = url.getScheme();
+                if (("http".equals(scheme) || "https".equals(scheme)) && !isAllowedHost(url.getHost())) {
+                    openInCustomTabs(url);
+                    return true;
+                }
+                return super.shouldOverrideUrlLoading(view, request);
+            }
+        });
+    }
+
+    // The WebViewListener only catches page-load failures; this catches
+    // connectivity drops while the game is idle.
+    private void setupNetworkMonitoring() {
+        connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        NetworkRequest request = new NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build();
+
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                runOnUiThread(() -> {
+                    boolean wasOffline = offlineOverlay != null && offlineOverlay.getVisibility() == View.VISIBLE;
+                    hideOfflineOverlay();
+                    // The page under the overlay is dead/stale — refresh it
+                    if (wasOffline && getBridge() != null && getBridge().getWebView() != null) {
+                        getBridge().getWebView().reload();
+                    }
+                });
+            }
+
+            @Override
+            public void onLost(Network network) {
+                showOfflineOverlay();
+            }
+
+            @Override
+            public void onCapabilitiesChanged(Network network, NetworkCapabilities caps) {
+                boolean hasInternet = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+                if (hasInternet) {
+                    hideOfflineOverlay();
+                } else {
+                    showOfflineOverlay();
+                }
+            }
+        };
+
+        connectivityManager.registerNetworkCallback(request, networkCallback);
+    }
+
+    private boolean isAllowedHost(String host) {
+        if (host == null) return false;
+        if (host.equals(APP_ORIGIN) || host.endsWith("." + APP_ORIGIN)) return true;
+        Bridge bridge = getBridge();
+        String[] allowed = bridge != null ? bridge.getConfig().getAllowNavigation() : null;
+        if (allowed != null) {
+            for (String entry : allowed) {
+                String e = entry.startsWith("*.") ? entry.substring(2) : entry;
+                if (host.equals(e) || host.endsWith("." + e)) return true;
+            }
+        }
+        return false;
+    }
+
+    private void openInCustomTabs(Uri url) {
+        CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+        builder.setShowTitle(true);
+        CustomTabsIntent customTabsIntent = builder.build();
+        customTabsIntent.intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        customTabsIntent.launchUrl(this, url);
     }
 
     private void showOfflineOverlay() {
@@ -117,6 +237,46 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         super.onPause();
         CookieManager.getInstance().flush();
+        pausedAtMs = SystemClock.elapsedRealtime();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (pausedAtMs > 0 && SystemClock.elapsedRealtime() - pausedAtMs > STALE_SESSION_MS) {
+            // Turn-based game: don't let the player act on a turn-old page
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().reload();
+            }
+        }
+        pausedAtMs = 0;
+    }
+
+    @Override
+    public void onBackPressed() {
+        Bridge bridge = getBridge();
+        if (bridge != null) {
+            WebView webView = bridge.getWebView();
+            if (webView != null && webView.canGoBack()) {
+                webView.goBack();
+                return;
+            }
+        }
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastBackPressMs < BACK_EXIT_WINDOW_MS) {
+            super.onBackPressed();
+        } else {
+            lastBackPressMs = now;
+            Toast.makeText(this, "Press back again to exit", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (connectivityManager != null && networkCallback != null) {
+            connectivityManager.unregisterNetworkCallback(networkCallback);
+        }
     }
 
     private int dp(int value) {

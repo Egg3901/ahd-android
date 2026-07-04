@@ -23,6 +23,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Open game links in the app. autoVerify needs
+                 https://ahousedividedgame.com/.well-known/assetlinks.json
+                 to be served; until then Android offers an app chooser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="www.ahousedividedgame.com" />
+                <data android:scheme="https" android:host="ahousedividedgame.com" />
+            </intent-filter>
+
         </activity>
 
         <provider
