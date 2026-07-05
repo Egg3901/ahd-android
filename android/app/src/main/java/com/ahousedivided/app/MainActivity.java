@@ -20,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.browser.customtabs.CustomTabsIntent;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
@@ -37,6 +38,7 @@ public class MainActivity extends BridgeActivity {
 
     private View offlineOverlay;
     private ViewGroup contentRoot;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private ConnectivityManager.NetworkCallback networkCallback;
     private ConnectivityManager connectivityManager;
     private long lastBackPressMs = 0;
@@ -54,6 +56,7 @@ public class MainActivity extends BridgeActivity {
     protected void load() {
         super.load();
         setupCookies();
+        setupPullToRefresh();
         setupWebViewListeners();
         setupExternalLinkHandling();
         setupNetworkMonitoring();
@@ -74,6 +77,44 @@ public class MainActivity extends BridgeActivity {
         contentRoot = (ViewGroup) webView.getParent();
     }
 
+    private void setupPullToRefresh() {
+        WebView webView = getBridge().getWebView();
+        if (webView == null || contentRoot == null) return;
+
+        swipeRefreshLayout = new SwipeRefreshLayout(this);
+        swipeRefreshLayout.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        swipeRefreshLayout.setColorSchemeColors(0xFF2563EB);
+        swipeRefreshLayout.setProgressBackgroundColorSchemeColor(0xFF0F172A);
+
+        ViewGroup.LayoutParams webViewParams = webView.getLayoutParams();
+        contentRoot.removeView(webView);
+        swipeRefreshLayout.addView(webView, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        contentRoot.addView(swipeRefreshLayout, webViewParams);
+
+        // Only pull-to-refresh when scrolled to the top of the page.
+        swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
+                webView.canScrollVertically(-1));
+
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            WebView wv = getBridge().getWebView();
+            if (wv != null) {
+                wv.reload();
+            } else {
+                swipeRefreshLayout.setRefreshing(false);
+            }
+        });
+    }
+
+    private void stopRefreshIndicator() {
+        if (swipeRefreshLayout != null) {
+            swipeRefreshLayout.setRefreshing(false);
+        }
+    }
+
     private void setupWebViewListeners() {
         getBridge().addWebViewListener(new WebViewListener() {
             @Override
@@ -85,11 +126,13 @@ public class MainActivity extends BridgeActivity {
             public void onPageLoaded(WebView view) {
                 hideOfflineOverlay();
                 CookieManager.getInstance().flush();
+                stopRefreshIndicator();
             }
 
             @Override
             public void onReceivedError(WebView view) {
                 Logger.debug(TAG, "WebView load error");
+                stopRefreshIndicator();
                 showOfflineOverlay();
             }
         });
