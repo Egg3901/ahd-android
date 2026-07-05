@@ -172,6 +172,10 @@ When the WebView fails to load (network unreachable, server down), a full-screen
 
 This is implemented in `MainActivity.java` via a `WebViewListener` that listens for `onReceivedError`. The overlay is a programmatic `LinearLayout` added to the root `FrameLayout`.
 
+## Pull to Refresh
+
+Swipe down from the top of the page to reload, matching browser refresh on the web version. The refresh indicator uses the app's blue accent (`#2563EB`) on a slate background. Pull-to-refresh only activates when the page is scrolled to the top, so it won't interfere with normal scrolling.
+
 ## Phase 2: Push Notifications
 
 ### What's done
