@@ -48,3 +48,7 @@ jobs:
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
+        with:
+          # SARIF upload requires Code scanning enabled (Settings → Security).
+          # Analysis still runs in CI; remove upload: false once enabled.
+          upload: false
