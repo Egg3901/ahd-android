@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from '@capacitor/cli';
+import packageJson from './package.json';
 
 const config: CapacitorConfig = {
   appId: 'com.ahousedivided.app',
@@ -10,7 +11,7 @@ const config: CapacitorConfig = {
     backgroundColor: '#0f172a',
     // Appended to the WebView UA so the server can detect native app context
     // and suppress web chrome (navbar, statusbar, footer) that we replace natively.
-    appendUserAgent: 'AHD-Android/1.0',
+    appendUserAgent: `AHD-Android/${packageJson.version}`,
   },
   server: {
     // Load the live production site. The WebView will be restricted
