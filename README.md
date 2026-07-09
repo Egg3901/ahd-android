@@ -2,7 +2,7 @@
 
 Thin Android wrapper for **A House Divided**, a turn-based political simulation game at [ahousedividedgame.com](https://www.ahousedividedgame.com). Built with [Capacitor](https://capacitorjs.com) — loads the live production site in a WebView. No game logic, auth, or UI is reimplemented natively.
 
-**Docs:** [CHANGELOG](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+**Docs:** [CHANGELOG](CHANGELOG.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Push preferences](docs/push-notification-preferences.md)
 
 ## Why a Remote-URL Wrapper?
 
@@ -38,7 +38,7 @@ ahd-android/
 ├── www/
 │   └── index.html              # Minimal placeholder (overridden by remote URL)
 ├── src/
-│   └── push-notifications.ts   # Phase 2: FCM push notification stub
+│   └── push-notifications.ts   # Phase 2: FCM push opt-in/out API
 └── android/                    # Native Android project (Capacitor-generated)
     ├── app/
     │   ├── build.gradle
@@ -214,22 +214,64 @@ Swipe down from the top of the page to reload, matching browser refresh on the w
 
 ## Phase 2: Push Notifications
 
+### Opt-in / opt-out (required)
+
+Notifications are **off by default**. The native shell must never auto-register
+on launch. The game web app owns the Settings toggle and calls this API:
+
+```ts
+const push = window.AHD_PushNotifications;
+
+// Drive the Settings toggle from product preference + OS permission
+const status = await push.getStatus();
+// status.optedIn === false by default
+
+// User turns the toggle ON
+const enabled = await push.enable();
+if (!enabled.ok && enabled.reason === 'permission_denied') {
+  // Keep toggle off; optionally deep-link to system notification settings
+}
+
+// User turns the toggle OFF
+await push.disable();
+
+// Cold start only — refreshes the FCM token if already opted in; never prompts
+await push.syncIfOptedIn();
+```
+
+| Call | Behavior |
+|------|----------|
+| `getStatus()` | Returns `{ optedIn, permission, hasToken, isNative }` |
+| `enable()` | Requests OS permission → FCM register → `POST /api/push/register` with `enabled: true` |
+| `disable()` | `POST /api/push/unregister` with `enabled: false` → FCM unregister → clears local preference |
+| `syncIfOptedIn()` | No-op unless previously opted in **and** OS permission still granted |
+
+If the player denies the system prompt, `enable()` fails with
+`permission_denied` and leaves `optedIn` false. If they later revoke OS
+permission, `syncIfOptedIn()` clears the local preference so the toggle shows
+off (no re-prompt).
+
+See [docs/push-notification-preferences.md](docs/push-notification-preferences.md)
+for the full client/server contract.
+
 ### What's done
 - `@capacitor/push-notifications` plugin installed and synced
-- `src/push-notifications.ts` — registration + listener **stub**. Note: this
-  file is **not yet wired into the running app**. It compiles to `dist/`, but
-  nothing in `www/index.html` loads it and there is no injection step. To
-  activate it, either bundle/import it from the web app or inject it via the
-  Capacitor bridge. Until then it serves as the reference implementation.
+- `src/push-notifications.ts` — **opt-in/out preference API** (`enable` /
+  `disable` / `getStatus` / `syncIfOptedIn`). Note: this file is **not yet
+  wired into the running app**. It compiles to `dist/`, but nothing in
+  `www/index.html` loads it and there is no injection step. To activate it,
+  either bundle/import it from the web app or inject it via the Capacitor
+  bridge. Until then it serves as the reference implementation.
 - `google-services.json` integration is scaffolded in `android/app/build.gradle` (auto-applies the Google Services plugin when the file is present)
 
 ### What's needed to complete
 1. **Create a Firebase project** → [console.firebase.google.com](https://console.firebase.google.com)
-2. **Add an Android app** to the Firebase project with package name `com.ahousedivided.app`
+2. **Add an Android app** to the Firebase project with package name `com.[REDACTED].app`
 3. **Download `google-services.json`** → place in `android/app/`
 4. **Create a service account** → Firebase Console → Project Settings → Service Accounts → "Generate new private key". The legacy "Server Key" was decommissioned in June 2024 and no longer works.
 5. **Set the service-account credentials** on the game server (e.g. `GOOGLE_APPLICATION_CREDENTIALS` pointing at the JSON, or the Firebase Admin SDK). The server mints short-lived OAuth2 access tokens from these to call the FCM HTTP v1 API.
 6. **Implement server-side endpoints** (see below)
+7. **Add a Settings → Notifications toggle** in the web app that calls `enable()` / `disable()` (default off)
 
 ### Server-side endpoints
 The game server needs two new API endpoints:
@@ -239,18 +281,20 @@ POST /api/push/register
 Authorization: <JWT cookie>
 Content-Type: application/json
 
-{ "token": "<FCM_DEVICE_TOKEN>", "platform": "android" }
+{ "token": "<FCM_DEVICE_TOKEN>", "platform": "android", "enabled": true }
 ```
 Stores the token in the user document: `user.pushTokens: [{ token, platform, createdAt }]`
+and sets `user.settings.pushNotifications = true`.
 
 ```http
 POST /api/push/unregister
 Authorization: <JWT cookie>
 Content-Type: application/json
 
-{ "token": "<FCM_DEVICE_TOKEN>" }
+{ "token": "<FCM_DEVICE_TOKEN>", "enabled": false }
 ```
-Removes the token from the user document.
+Removes the token from the user document and sets
+`user.settings.pushNotifications = false`.
 
 ### Server-side cron hook
 In the hourly turn processor, after turn advancement. The simplest correct
@@ -282,7 +326,7 @@ const res = await getMessaging().sendEachForMulticast({
   data: {
     type: 'turn_start',
     turn: String(currentTurn),
-    deep_link: 'https://www.ahousedividedgame.com/dashboard',
+    deep_link: 'https://www.[REDACTED]game.com/dashboard',
   },
 });
 
