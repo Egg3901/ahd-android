@@ -1,0 +1,33 @@
+# Lean self-hosted CI (Woodpecker on Hetzner, workflows.ahousedividedgame.com).
+# Matches the a-house-divided repo's pipeline: local/exec backend, no
+# host-path `volumes:` mounts. Only gates the TS/web layer (typecheck) — the
+# android/ Gradle build (build:apk / build:run) needs a JDK + Android SDK the
+# agent image doesn't have, so it's NOT covered here. Add a separate
+# Gradle-capable pipeline/agent later if native-build CI is wanted.
+#
+# No `npm audit` gate — a-house-divided's own pipeline dropped it
+# deliberately (a transitive high-severity advisory with no code-level fix
+# available would turn this into a permanently-red, unactionable check, the
+# same failure mode as the GitHub Actions billing outage this migration was
+# meant to get away from).
+
+when:
+  - event: pull_request
+  - event: push
+    branch: [master]
+
+clone:
+  git:
+    image: docker.io/woodpeckerci/plugin-git
+    settings:
+      lfs: false
+
+steps:
+  install:
+    image: sh
+    commands: [npm ci --no-audit --no-fund]
+
+  typecheck:
+    image: sh
+    commands: [npm run typecheck]
+    depends_on: [install]
