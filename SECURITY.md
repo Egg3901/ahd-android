@@ -16,7 +16,7 @@ for release history.
 
 Report security issues privately to the maintainers:
 
-- **Email:** security@[REDACTED]game.com (replace with your operational inbox)
+- **Email:** security@ahousedividedgame.com (replace with your operational inbox)
 - **Subject:** `[AHD Android Security]` short summary
 
 Include:
@@ -33,7 +33,7 @@ timeline within **10 business days** for confirmed issues.
 
 This repository is a **thin Capacitor WebView wrapper**. It does not implement game
 logic, authentication, or user data storage. Sensitive behavior lives on the remote
-web application at `https://www.[REDACTED]game.com`.
+web application at `https://www.ahousedividedgame.com`.
 
 ### What this app protects
 

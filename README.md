@@ -266,7 +266,7 @@ for the full client/server contract.
 
 ### What's needed to complete
 1. **Create a Firebase project** → [console.firebase.google.com](https://console.firebase.google.com)
-2. **Add an Android app** to the Firebase project with package name `com.[REDACTED].app`
+2. **Add an Android app** to the Firebase project with package name `com.ahousedivided.app`
 3. **Download `google-services.json`** → place in `android/app/`
 4. **Create a service account** → Firebase Console → Project Settings → Service Accounts → "Generate new private key". The legacy "Server Key" was decommissioned in June 2024 and no longer works.
 5. **Set the service-account credentials** on the game server (e.g. `GOOGLE_APPLICATION_CREDENTIALS` pointing at the JSON, or the Firebase Admin SDK). The server mints short-lived OAuth2 access tokens from these to call the FCM HTTP v1 API.
@@ -326,7 +326,7 @@ const res = await getMessaging().sendEachForMulticast({
   data: {
     type: 'turn_start',
     turn: String(currentTurn),
-    deep_link: 'https://www.[REDACTED]game.com/dashboard',
+    deep_link: 'https://www.ahousedividedgame.com/dashboard',
   },
 });
 

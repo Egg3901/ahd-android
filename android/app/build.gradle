@@ -17,6 +17,9 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "com.ahousedivided.app"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId "com.ahousedivided.app"
         minSdkVersion rootProject.ext.minSdkVersion
