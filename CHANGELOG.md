@@ -9,6 +9,15 @@ Release versions and this changelog are managed by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) on `master`.
 
+## [0.2.0](https://github.com/Egg3901/ahd-android/compare/v1.1.0...v0.2.0) (2026-07-11)
+
+### Fixes
+
+* Launcher icon: restore white fill inside the Liberty Bell ring (icon was washed out against the dark background)
+* Restore `ahousedivided` package/domain references that were accidentally blanked out in a prior pass, breaking the instrumented test build
+* Enable `BuildConfig` generation so `androidTest` compiles under AGP 8
+* First manually-cut release; version renumbered to 0.2.0 to reflect actual release maturity ahead of Play Store submission
+
 ## [1.1.0](https://github.com/Egg3901/ahd-android/compare/v1.0.0...v1.1.0) (2026-07-04)
 
 ### Features
