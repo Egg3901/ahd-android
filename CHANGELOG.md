@@ -9,6 +9,17 @@ Release versions and this changelog are managed by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) on `master`.
 
+## [0.3.0](https://github.com/Egg3901/ahd-android/compare/v0.2.0...v0.3.0) (2026-07-11)
+
+### Features
+
+* Network monitoring tracks the default active network instead of every network, so a WiFi-to-cellular handoff no longer flashes a spurious "offline" overlay
+* Offline detection now requires a validated internet link, so a captive portal or dead connection is treated as offline rather than falsely "connected"
+
+### Notes
+
+* First public release build, bundled for Firebase App Distribution ahead of the initial launch
+
 ## [0.2.0](https://github.com/Egg3901/ahd-android/compare/v1.1.0...v0.2.0) (2026-07-11)
 
 ### Fixes

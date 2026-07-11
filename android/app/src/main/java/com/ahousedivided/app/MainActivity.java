@@ -5,7 +5,6 @@ import android.content.pm.ApplicationInfo;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
-import android.net.NetworkRequest;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -158,43 +157,49 @@ public class MainActivity extends BridgeActivity {
     }
 
     // The WebViewListener only catches page-load failures; this catches
-    // connectivity drops while the game is idle.
+    // connectivity drops while the game is idle. We track the *default*
+    // active network rather than every network, so a WiFi->cellular handoff
+    // (WiFi's onLost fires while cellular is already carrying traffic) no
+    // longer flashes a spurious offline overlay. We also require the
+    // VALIDATED capability so a captive-portal / no-real-internet link is
+    // treated as offline instead of falsely "connected".
     private void setupNetworkMonitoring() {
         connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
-        NetworkRequest request = new NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build();
 
         networkCallback = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
-                runOnUiThread(() -> {
-                    boolean wasOffline = offlineOverlay != null && offlineOverlay.getVisibility() == View.VISIBLE;
-                    hideOfflineOverlay();
-                    // The page under the overlay is dead/stale — refresh it
-                    if (wasOffline && getBridge() != null && getBridge().getWebView() != null) {
-                        getBridge().getWebView().reload();
-                    }
-                });
+                // Don't hide the overlay yet — wait for onCapabilitiesChanged
+                // to confirm the default network actually reaches the internet.
             }
 
             @Override
             public void onLost(Network network) {
+                // Fired only when the default network drops with no replacement.
                 showOfflineOverlay();
             }
 
             @Override
             public void onCapabilitiesChanged(Network network, NetworkCapabilities caps) {
-                boolean hasInternet = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
-                if (hasInternet) {
-                    hideOfflineOverlay();
+                boolean online = caps != null
+                    && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                if (online) {
+                    runOnUiThread(() -> {
+                        boolean wasOffline = offlineOverlay != null && offlineOverlay.getVisibility() == View.VISIBLE;
+                        hideOfflineOverlay();
+                        // The page under the overlay is dead/stale — refresh it
+                        if (wasOffline && getBridge() != null && getBridge().getWebView() != null) {
+                            getBridge().getWebView().reload();
+                        }
+                    });
                 } else {
                     showOfflineOverlay();
                 }
             }
         };
 
-        connectivityManager.registerNetworkCallback(request, networkCallback);
+        connectivityManager.registerDefaultNetworkCallback(networkCallback);
     }
 
     private boolean isAllowedHost(String host) {
