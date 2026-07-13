@@ -21,7 +21,7 @@
   "author": "A House Divided",
   "license": "MIT",
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
