@@ -1,5 +1,6 @@
 package com.ahousedivided.app;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.net.ConnectivityManager;
@@ -7,11 +8,15 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -34,12 +39,22 @@ public class MainActivity extends BridgeActivity {
     // turn-based, so a stale page can show a turn-old state.
     private static final long STALE_SESSION_MS = 30 * 60 * 1000;
     private static final long BACK_EXIT_WINDOW_MS = 2000;
+    // How long the default network must stay bad before we cover the game
+    // with the offline overlay. OEM power management (and WiFi<->cellular
+    // handoffs) flap the VALIDATED capability for a second or two while the
+    // page underneath is perfectly fine.
+    private static final long OFFLINE_OVERLAY_DEBOUNCE_MS = 3000;
 
     private View offlineOverlay;
     private ViewGroup contentRoot;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ConnectivityManager.NetworkCallback networkCallback;
     private ConnectivityManager connectivityManager;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Runnable pendingOfflineShow;
+    // Set only when the page document itself failed to load — the one case
+    // where the WebView content is dead and a reload is required.
+    private boolean mainFrameFailed = false;
     private long lastBackPressMs = 0;
     private long pausedAtMs = 0;
 
@@ -80,12 +95,15 @@ public class MainActivity extends BridgeActivity {
         WebView webView = getBridge().getWebView();
         if (webView == null || contentRoot == null) return;
 
-        swipeRefreshLayout = new SwipeRefreshLayout(this);
+        swipeRefreshLayout = new ZoomFriendlySwipeRefreshLayout(this);
         swipeRefreshLayout.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
         swipeRefreshLayout.setColorSchemeColors(0xFF2563EB);
         swipeRefreshLayout.setProgressBackgroundColorSchemeColor(0xFF0F172A);
+        // Let the page's own touch handlers (map pan/zoom surfaces call
+        // preventDefault) veto the pull-to-refresh gesture.
+        swipeRefreshLayout.setLegacyRequestDisallowInterceptTouchEventEnabled(true);
 
         ViewGroup.LayoutParams webViewParams = webView.getLayoutParams();
         contentRoot.removeView(webView);
@@ -123,6 +141,7 @@ public class MainActivity extends BridgeActivity {
 
             @Override
             public void onPageLoaded(WebView view) {
+                mainFrameFailed = false;
                 hideOfflineOverlay();
                 CookieManager.getInstance().flush();
                 stopRefreshIndicator();
@@ -130,9 +149,12 @@ public class MainActivity extends BridgeActivity {
 
             @Override
             public void onReceivedError(WebView view) {
-                Logger.debug(TAG, "WebView load error");
+                // Capacitor fires this for EVERY failed resource — a blocked
+                // analytics beacon or an aborted prefetch included — with no
+                // frame or error-code detail. Never treat it as "offline";
+                // the real signal is the main-frame check in the
+                // BridgeWebViewClient override below.
                 stopRefreshIndicator();
-                showOfflineOverlay();
             }
         });
     }
@@ -152,6 +174,26 @@ public class MainActivity extends BridgeActivity {
                     return true;
                 }
                 return super.shouldOverrideUrlLoading(view, request);
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                // Only a failed page document means the game is unreachable.
+                // Subresource failures (ads/analytics blocked by DNS filters,
+                // a flaky image, a cancelled fetch) must not cover a working
+                // page with the offline screen.
+                if (request == null || !request.isForMainFrame()) return;
+                CharSequence rawDesc = error != null ? error.getDescription() : null;
+                String desc = rawDesc != null ? rawDesc.toString() : "";
+                // A superseded navigation (tapping a link mid-load, the
+                // client-side router taking over) surfaces as ERR_ABORTED —
+                // not a connectivity failure.
+                if (desc.contains("ERR_ABORTED")) return;
+                Logger.debug(TAG, "Main-frame load failed: " + desc);
+                mainFrameFailed = true;
+                stopRefreshIndicator();
+                showOfflineOverlay();
             }
         });
     }
@@ -175,8 +217,10 @@ public class MainActivity extends BridgeActivity {
 
             @Override
             public void onLost(Network network) {
-                // Fired only when the default network drops with no replacement.
-                showOfflineOverlay();
+                // Fired when the default network drops — including the moment
+                // of a WiFi->cellular switch, so debounce before covering the
+                // game.
+                scheduleOfflineOverlay();
             }
 
             @Override
@@ -185,21 +229,45 @@ public class MainActivity extends BridgeActivity {
                     && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                     && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
                 if (online) {
+                    cancelPendingOfflineOverlay();
                     runOnUiThread(() -> {
-                        boolean wasOffline = offlineOverlay != null && offlineOverlay.getVisibility() == View.VISIBLE;
                         hideOfflineOverlay();
-                        // The page under the overlay is dead/stale — refresh it
-                        if (wasOffline && getBridge() != null && getBridge().getWebView() != null) {
+                        // Reload only when the page document itself died —
+                        // an intact page survives a connectivity blip and a
+                        // forced reload would dump the player's scroll/form
+                        // state at random.
+                        if (mainFrameFailed && getBridge() != null && getBridge().getWebView() != null) {
+                            mainFrameFailed = false;
                             getBridge().getWebView().reload();
                         }
                     });
                 } else {
-                    showOfflineOverlay();
+                    scheduleOfflineOverlay();
                 }
             }
         };
 
         connectivityManager.registerDefaultNetworkCallback(networkCallback);
+    }
+
+    private void scheduleOfflineOverlay() {
+        mainHandler.post(() -> {
+            if (pendingOfflineShow != null) return; // already counting down
+            pendingOfflineShow = () -> {
+                pendingOfflineShow = null;
+                showOfflineOverlay();
+            };
+            mainHandler.postDelayed(pendingOfflineShow, OFFLINE_OVERLAY_DEBOUNCE_MS);
+        });
+    }
+
+    private void cancelPendingOfflineOverlay() {
+        mainHandler.post(() -> {
+            if (pendingOfflineShow != null) {
+                mainHandler.removeCallbacks(pendingOfflineShow);
+                pendingOfflineShow = null;
+            }
+        });
     }
 
     private boolean isAllowedHost(String host) {
@@ -258,6 +326,7 @@ public class MainActivity extends BridgeActivity {
             retry.setPadding(dp(24), dp(12), dp(24), dp(12));
             retry.setOnClickListener(v -> {
                 hideOfflineOverlay();
+                mainFrameFailed = false;
                 WebView wv = getBridge().getWebView();
                 if (wv != null) wv.reload();
             });
@@ -325,9 +394,32 @@ public class MainActivity extends BridgeActivity {
         if (connectivityManager != null && networkCallback != null) {
             connectivityManager.unregisterNetworkCallback(networkCallback);
         }
+        mainHandler.removeCallbacksAndMessages(null);
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    // SwipeRefreshLayout treats any downward drag as pull-to-refresh, which
+    // hijacks pinch-zoom/pan on the in-game maps when the page is scrolled to
+    // the top ("zooming in on a map causes the page to refresh"). A second
+    // pointer always means zoom/pan, never refresh.
+    private static class ZoomFriendlySwipeRefreshLayout extends SwipeRefreshLayout {
+        ZoomFriendlySwipeRefreshLayout(Context context) {
+            super(context);
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent ev) {
+            if (ev.getPointerCount() > 1) return false;
+            return super.onInterceptTouchEvent(ev);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent ev) {
+            if (ev.getPointerCount() > 1) return false;
+            return super.onTouchEvent(ev);
+        }
     }
 }
