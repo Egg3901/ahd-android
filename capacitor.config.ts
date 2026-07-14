@@ -15,8 +15,10 @@ const config: CapacitorConfig = {
   },
   server: {
     // Load the live production site. The WebView will be restricted
-    // to this origin so cookies flow naturally.
-    url: 'https://www.ahousedividedgame.com',
+    // to this origin so cookies flow naturally. Apex, not www — the
+    // server 301s www -> apex, and that extra hop on every cold start
+    // is one more thing that can fail on a flaky mobile connection.
+    url: 'https://ahousedividedgame.com',
     cleartext: false, // enforce HTTPS
     // Allow OAuth provider domains to navigate inside the WebView.
     // Without this, OAuth callback redirects set the session cookie
