@@ -26,6 +26,12 @@ const config: CapacitorConfig = {
     // and the user never gets logged in inside the app.
     allowNavigation: [
       'ahousedividedgame.com',
+      // The Discord OAuth callback (DISCORD_REDIRECT_URI) lands on the www
+      // host before the server 301s to apex. Without www here the WebView
+      // punts that callback to the system browser, the session cookie is set
+      // there instead of in the app, and the user is "signed in" only in the
+      // browser — the reported "redirects to browser after Discord auth" bug.
+      'www.ahousedividedgame.com',
       'discord.com',
       'accounts.google.com',
       'www.google.com',
