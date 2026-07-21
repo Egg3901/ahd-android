@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0]
+
+### Features
+
+- In-app Main/Sandbox server switcher — long-press the top-left corner to point the app at `sandbox.ahousedividedgame.com`; the choice persists across launches.
+
+### Bug Fixes
+
+- Discord OAuth now returns to the app instead of the system browser. The callback lands on `www.ahousedividedgame.com`, which was missing from `allowNavigation`, so the WebView punted it to the browser and the session cookie was set there. Added `www` to the allowlist.
+
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
