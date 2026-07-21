@@ -212,6 +212,12 @@ This is implemented in `MainActivity.java` via a `WebViewListener` that listens 
 
 Swipe down from the top of the page to reload, matching browser refresh on the web version. The refresh indicator uses the app's blue accent (`#2563EB`) on a slate background. Pull-to-refresh only activates when the page is scrolled to the top, so it won't interfere with normal scrolling.
 
+## Server Switcher (Main / Sandbox)
+
+**Long-press the top-left corner** of the screen to open a Main/Sandbox picker. This lets testers point the app at `sandbox.ahousedividedgame.com` instead of the live site without a separate build. The choice is saved (`SharedPreferences`, `server_env`) and reapplied on the next launch.
+
+Detected in `MainActivity.dispatchTouchEvent` via a `GestureDetector`, so it never intercepts the WebView's own touch handling; the long-press is scoped to the top-left ~18%×12% region so normal in-game long-presses are unaffected. Both hosts are `*.ahousedividedgame.com`, so `isAllowedHost()` keeps them in the WebView and the auth cookie (`.ahousedividedgame.com`) is shared across them.
+
 ## Phase 2: Push Notifications
 
 ### Opt-in / opt-out (required)
