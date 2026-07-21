@@ -1,8 +1,11 @@
 package com.ahousedivided.app;
 
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
+import android.view.GestureDetector;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
@@ -35,6 +38,14 @@ public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "AHD-MainActivity";
     private static final String APP_ORIGIN = "ahousedividedgame.com";
+    // Server switcher (testers/devs): long-press the top-left corner to pick
+    // Main vs Sandbox. Persisted across launches. Both are *.ahousedividedgame.com
+    // so isAllowedHost() keeps them in the WebView and the auth cookie is shared.
+    private static final String PREFS = "ahd_prefs";
+    private static final String PREF_SERVER = "server_env"; // "main" | "sandbox"
+    private static final String MAIN_URL = "https://ahousedividedgame.com";
+    private static final String SANDBOX_URL = "https://sandbox.ahousedividedgame.com";
+    private GestureDetector serverSwitchDetector;
     // Reload when returning from background after this long — the game is
     // turn-based, so a stale page can show a turn-old state.
     private static final long STALE_SESSION_MS = 30 * 60 * 1000;
@@ -74,6 +85,8 @@ public class MainActivity extends BridgeActivity {
         setupWebViewListeners();
         setupExternalLinkHandling();
         setupNetworkMonitoring();
+        setupServerSwitchGesture();
+        applyServerPreference();
 
         // Remote inspection from chrome://inspect (debuggable builds only)
         boolean debuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
@@ -348,6 +361,65 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(() -> {
             if (offlineOverlay != null) offlineOverlay.setVisibility(View.GONE);
         });
+    }
+
+    // ── Server switcher (Main ↔ Sandbox) ──────────────────────────────────
+
+    private boolean isSandbox() {
+        return "sandbox".equals(
+                getSharedPreferences(PREFS, MODE_PRIVATE).getString(PREF_SERVER, "main"));
+    }
+
+    // If the saved preference is Sandbox but the app booted on the default (Main)
+    // origin from capacitor.config, switch the WebView over. No-op on Main.
+    private void applyServerPreference() {
+        if (!isSandbox()) return;
+        WebView wv = getBridge().getWebView();
+        if (wv != null) wv.loadUrl(SANDBOX_URL);
+    }
+
+    // Detected via dispatchTouchEvent so it never intercepts the WebView's own
+    // touch handling — a long-press localized to the top-left corner opens the
+    // switcher. Corner-scoped so normal long-presses in the game are unaffected.
+    private void setupServerSwitchGesture() {
+        serverSwitchDetector = new GestureDetector(this,
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public void onLongPress(MotionEvent e) {
+                        View decor = getWindow().getDecorView();
+                        if (e.getX() < decor.getWidth() * 0.18f
+                                && e.getY() < decor.getHeight() * 0.12f) {
+                            showServerSwitcher();
+                        }
+                    }
+                });
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (serverSwitchDetector != null) serverSwitchDetector.onTouchEvent(ev);
+        return super.dispatchTouchEvent(ev);
+    }
+
+    private void showServerSwitcher() {
+        boolean sandbox = isSandbox();
+        new AlertDialog.Builder(this)
+                .setTitle("Server")
+                .setMessage("Currently on: " + (sandbox ? "Sandbox" : "Main")
+                        + "\n\nPick which server the app connects to.")
+                .setPositiveButton("Main", (d, w) -> switchServer("main", MAIN_URL))
+                .setNegativeButton("Sandbox", (d, w) -> switchServer("sandbox", SANDBOX_URL))
+                .setNeutralButton("Cancel", null)
+                .show();
+    }
+
+    private void switchServer(String env, String url) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(PREF_SERVER, env).apply();
+        WebView wv = getBridge().getWebView();
+        if (wv != null) wv.loadUrl(url);
+        Toast.makeText(this,
+                "Switched to " + ("sandbox".equals(env) ? "Sandbox" : "Main"),
+                Toast.LENGTH_SHORT).show();
     }
 
     @Override
