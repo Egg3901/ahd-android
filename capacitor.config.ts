@@ -1,5 +1,10 @@
 import type { CapacitorConfig } from '@capacitor/cli';
-import packageJson from './package.json';
+// Needs the import attribute: the Capacitor CLI loads this file as an ES
+// module, and Node refuses a JSON import without `with { type: 'json' }`.
+// Without it `cap sync` dies with ERR_IMPORT_ATTRIBUTE_MISSING and exits 1,
+// which leaves the previous synced assets in place — the Gradle build still
+// succeeds against stale output, so the failure is easy to miss locally.
+import packageJson from './package.json' with { type: 'json' };
 
 const config: CapacitorConfig = {
   appId: 'com.ahousedivided.app',
