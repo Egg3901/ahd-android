@@ -4,20 +4,24 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 1.1.x   | Yes       |
-| < 1.1   | No        |
+| 0.4.x   | Yes       |
+| < 0.4   | No        |
 
 Security fixes are released on the latest minor version. See [CHANGELOG.md](CHANGELOG.md)
 for release history.
+
+> Note on numbering: a `v1.1.0` tag exists from 2026-07-04, before releases moved to
+> [release-please](https://github.com/googleapis/release-please). It sorts above the
+> current line but is **older** than `v0.4.0`. The active sequence is
+> `0.2.0` → `0.3.0` → `0.4.0`.
 
 ## Reporting a vulnerability
 
 **Please do not open public GitHub issues for security vulnerabilities.**
 
-Report security issues privately to the maintainers:
-
-- **Email:** security@ahousedividedgame.com (replace with your operational inbox)
-- **Subject:** `[AHD Android Security]` short summary
+Use [**private vulnerability reporting**](https://github.com/Egg3901/ahd-android/security/advisories/new)
+— the Security tab on this repository. It goes straight to the maintainers, stays
+private until a fix ships, and needs no email round-trip.
 
 Include:
 
@@ -33,7 +37,8 @@ timeline within **10 business days** for confirmed issues.
 
 This repository is a **thin Capacitor WebView wrapper**. It does not implement game
 logic, authentication, or user data storage. Sensitive behavior lives on the remote
-web application at `https://www.ahousedividedgame.com`.
+web application at `https://ahousedividedgame.com` (the app loads the apex host; `www`
+is allowlisted only so the Discord OAuth callback lands inside the WebView).
 
 ### What this app protects
 
