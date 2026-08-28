@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.1](https://github.com/Egg3901/ahd-android/compare/v0.4.0...v0.4.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **config:** add import attribute so cap sync survives the Capacitor 8.5 bump ([124f6ff](https://github.com/Egg3901/ahd-android/commit/124f6ff0c4fdb435ebcea35c8f10b9c421c93f8f))
+* **deps:** clear critical tar advisory (note: CI is blocked on billing, not code) ([751834b](https://github.com/Egg3901/ahd-android/commit/751834b3ef9cc36d3fc67b388658d5b0b2e31a75))
+* **deps:** clear critical tar and high brace-expansion advisories ([4238a0d](https://github.com/Egg3901/ahd-android/commit/4238a0d6042a7c287e29f1bd434debce0b2be2bd))
+* **deps:** pin uuid past the buffer bounds advisory ([#27](https://github.com/Egg3901/ahd-android/issues/27)) ([fd4e168](https://github.com/Egg3901/ahd-android/commit/fd4e168229bb7a0a75b80f3d8573d511740466f0))
+* unbreak Android build inputs, clear dependabot backlog ([#22](https://github.com/Egg3901/ahd-android/issues/22)) ([751834b](https://github.com/Egg3901/ahd-android/commit/751834b3ef9cc36d3fc67b388658d5b0b2e31a75))
+
+
+### Documentation
+
+* **security:** fix reporting channel and supported versions ([#25](https://github.com/Egg3901/ahd-android/issues/25)) ([aad161d](https://github.com/Egg3901/ahd-android/commit/aad161db1effff6dea743a82ae707e01804ea284))
+
+
+### Continuous Integration
+
+* upload CodeQL results now that code scanning is available ([#24](https://github.com/Egg3901/ahd-android/issues/24)) ([56a5da3](https://github.com/Egg3901/ahd-android/commit/56a5da3b26ad2aeb5c57efedda9f7a0b3309541a))
+
 ## [0.4.0]
 
 ### Features
