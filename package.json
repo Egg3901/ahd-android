@@ -1,6 +1,6 @@
 {
   "name": "ahd-android",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Thin Android wrapper for A House Divided — a turn-based political simulation",
   "main": "index.js",
   "scripts": {
