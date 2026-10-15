@@ -19,7 +19,7 @@ for release history.
 
 **Please do not open public GitHub issues for security vulnerabilities.**
 
-Use [**private vulnerability reporting**](https://github.com/Egg3901/ahd-android/security/advisories/new)
+Use [**private vulnerability reporting**](https://github.com/lakesidegamedev/ahd-android/security/advisories/new)
 — the Security tab on this repository. It goes straight to the maintainers, stays
 private until a fix ships, and needs no email round-trip.
 
